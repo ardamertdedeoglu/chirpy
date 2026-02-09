@@ -120,3 +120,39 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
 	}
 }
+
+func (cfg *apiConfig) handleInfoChange(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	params := parameters{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
+		return
+	}
+
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "no token", err)
+	}
+
+	user_id, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "invalid token", err)
+	}
+
+	new_hashed_pass, err := auth.HashPassword(params.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "couldn't hash password", err)
+	}
+
+	new_user, err := cfg.db.UpdateInfo(r.Context(), database.UpdateInfoParams{
+		Email:          params.Email,
+		HashedPassword: new_hashed_pass,
+		ID:             user_id,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "couldn't update info", err)
+	}
+
+	respondWithJSON(w, http.StatusOK, convertUser(new_user))
+}
