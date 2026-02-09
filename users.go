@@ -59,17 +59,17 @@ func (cfg *apiConfig) handleCreateUsers(w http.ResponseWriter, r *http.Request) 
 
 func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 	type loginParameters struct {
-		Email            string
-		Password         string
-		ExpiresInSeconds *int
+		Email    string
+		Password string
 	}
 
 	type UserCredentials struct {
-		Id        string `json:"id"`
-		CreatedAt string `json:"created_at"`
-		UpdatedAt string `json:"updated_at"`
-		Email     string `json:"email"`
-		Token     string `json:"token"`
+		Id           string `json:"id"`
+		CreatedAt    string `json:"created_at"`
+		UpdatedAt    string `json:"updated_at"`
+		Email        string `json:"email"`
+		Token        string `json:"token"`
+		RefreshToken string `json:"refresh_token"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	params := loginParameters{}
@@ -91,22 +91,29 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	expire := time.Duration(3600 * time.Second)
 
-	if params.ExpiresInSeconds != nil {
-		expire = time.Duration(*params.ExpiresInSeconds * int(time.Second))
-	}
-
 	token, err := auth.MakeJWT(user.ID, cfg.secret, expire)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "couldn't create jwt token", err)
 	}
 
+	ref_token, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "couldn't create refresh token", err)
+	}
+
+	err = cfg.db.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{UserID: user.ID, Token: ref_token})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error storing refresh token", err)
+	}
+
 	if valid {
 		respondWithJSON(w, http.StatusOK, UserCredentials{
-			Id:        user.ID.String(),
-			CreatedAt: user.CreatedAt.Format(time.RFC3339),
-			UpdatedAt: user.UpdatedAt.Format(time.RFC3339),
-			Email:     user.Email,
-			Token:     token,
+			Id:           user.ID.String(),
+			CreatedAt:    user.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:    user.UpdatedAt.Format(time.RFC3339),
+			Email:        user.Email,
+			Token:        token,
+			RefreshToken: ref_token,
 		})
 	} else {
 		fmt.Println("not valid")
