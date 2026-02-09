@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ardamertdedeoglu/chirpy/internal/auth"
 	"github.com/ardamertdedeoglu/chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -31,13 +32,22 @@ func convertChirp(chirp database.Chirp) returnVals {
 func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request) {
 	profaneWords := map[string]struct{}{"kerfuffle": {}, "sharbert": {}, "fornax": {}}
 	type parameters struct {
-		Body   string `json:"body"`
-		UserId string `json:"user_id"`
+		Body string `json:"body"`
+	}
+
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "No token", err)
+	}
+
+	user_id, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Invalid token", err)
 	}
 
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
 		return
@@ -59,11 +69,6 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 		}
 	}
 	cleaned_body := strings.TrimSpace(res_body.String())
-	user_id, err := uuid.Parse(params.UserId)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "couldn't parse uuid", err)
-		return
-	}
 
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   cleaned_body,

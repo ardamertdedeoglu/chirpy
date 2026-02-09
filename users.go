@@ -58,8 +58,21 @@ func (cfg *apiConfig) handleCreateUsers(w http.ResponseWriter, r *http.Request) 
 }
 
 func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
+	type loginParameters struct {
+		Email            string
+		Password         string
+		ExpiresInSeconds *int
+	}
+
+	type UserCredentials struct {
+		Id        string `json:"id"`
+		CreatedAt string `json:"created_at"`
+		UpdatedAt string `json:"updated_at"`
+		Email     string `json:"email"`
+		Token     string `json:"token"`
+	}
 	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
+	params := loginParameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
@@ -76,8 +89,25 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, "couldn't check hash", err)
 	}
 
+	expire := time.Duration(3600 * time.Second)
+
+	if params.ExpiresInSeconds != nil {
+		expire = time.Duration(*params.ExpiresInSeconds * int(time.Second))
+	}
+
+	token, err := auth.MakeJWT(user.ID, cfg.secret, expire)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "couldn't create jwt token", err)
+	}
+
 	if valid {
-		respondWithJSON(w, http.StatusOK, convertUser(user))
+		respondWithJSON(w, http.StatusOK, UserCredentials{
+			Id:        user.ID.String(),
+			CreatedAt: user.CreatedAt.Format(time.RFC3339),
+			UpdatedAt: user.UpdatedAt.Format(time.RFC3339),
+			Email:     user.Email,
+			Token:     token,
+		})
 	} else {
 		fmt.Println("not valid")
 		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
