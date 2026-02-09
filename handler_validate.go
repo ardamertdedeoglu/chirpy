@@ -7,7 +7,7 @@ import (
 )
 
 func handlerChirpsValidate(w http.ResponseWriter, r *http.Request) {
-	profaneWords := map[string]struct{}{"kerfuffle": struct{}{}, "sharbert": struct{}{}, "fornax": struct{}{}}
+	profaneWords := map[string]struct{}{"kerfuffle": {}, "sharbert": {}, "fornax": {}}
 	type parameters struct {
 		Body string `json:"body"`
 	}
