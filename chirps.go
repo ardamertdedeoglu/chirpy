@@ -10,18 +10,19 @@ import (
 	"github.com/google/uuid"
 )
 
+type returnVals struct {
+	Id        string `json:"id"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	Body      string `json:"body"`
+	UserId    string `json:"user_id"`
+}
+
 func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request) {
 	profaneWords := map[string]struct{}{"kerfuffle": {}, "sharbert": {}, "fornax": {}}
 	type parameters struct {
 		Body   string `json:"body"`
 		UserId string `json:"user_id"`
-	}
-	type returnVals struct {
-		Id        string `json:"id"`
-		CreatedAt string `json:"created_at"`
-		UpdatedAt string `json:"updated_at"`
-		Body      string `json:"body"`
-		UserId    string `json:"user_id"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -51,6 +52,7 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 	user_id, err := uuid.Parse(params.UserId)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "couldn't parse uuid", err)
+		return
 	}
 
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
@@ -65,4 +67,25 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 		Body:      chirp.Body,
 		UserId:    chirp.UserID.String(),
 	})
+}
+
+func (cfg *apiConfig) handleGetChirps(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.db.GetChirps(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error getting chirps", err)
+		return
+	}
+
+	returnChips := make([]returnVals, 0)
+	for _, chirp := range chirps {
+		returnChips = append(returnChips, returnVals{
+			Id:        chirp.ID.String(),
+			CreatedAt: chirp.CreatedAt.Format(time.RFC3339),
+			UpdatedAt: chirp.UpdatedAt.Format(time.RFC3339),
+			Body:      chirp.Body,
+			UserId:    chirp.UserID.String(),
+		})
+	}
+
+	respondWithJSON(w, http.StatusOK, returnChips)
 }
