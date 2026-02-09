@@ -18,6 +18,16 @@ type returnVals struct {
 	UserId    string `json:"user_id"`
 }
 
+func convertChirp(chirp database.Chirp) returnVals {
+	return returnVals{
+		Id:        chirp.ID.String(),
+		CreatedAt: chirp.CreatedAt.Format(time.RFC3339),
+		UpdatedAt: chirp.UpdatedAt.Format(time.RFC3339),
+		Body:      chirp.Body,
+		UserId:    chirp.UserID.String(),
+	}
+}
+
 func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request) {
 	profaneWords := map[string]struct{}{"kerfuffle": {}, "sharbert": {}, "fornax": {}}
 	type parameters struct {
@@ -60,13 +70,7 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 		UserID: user_id,
 	})
 
-	respondWithJSON(w, http.StatusCreated, returnVals{
-		Id:        chirp.ID.String(),
-		CreatedAt: chirp.CreatedAt.Format(time.RFC3339),
-		UpdatedAt: chirp.UpdatedAt.Format(time.RFC3339),
-		Body:      chirp.Body,
-		UserId:    chirp.UserID.String(),
-	})
+	respondWithJSON(w, http.StatusCreated, convertChirp(chirp))
 }
 
 func (cfg *apiConfig) handleGetChirps(w http.ResponseWriter, r *http.Request) {
@@ -78,14 +82,22 @@ func (cfg *apiConfig) handleGetChirps(w http.ResponseWriter, r *http.Request) {
 
 	returnChips := make([]returnVals, 0)
 	for _, chirp := range chirps {
-		returnChips = append(returnChips, returnVals{
-			Id:        chirp.ID.String(),
-			CreatedAt: chirp.CreatedAt.Format(time.RFC3339),
-			UpdatedAt: chirp.UpdatedAt.Format(time.RFC3339),
-			Body:      chirp.Body,
-			UserId:    chirp.UserID.String(),
-		})
+		returnChips = append(returnChips, convertChirp(chirp))
 	}
 
 	respondWithJSON(w, http.StatusOK, returnChips)
+}
+
+func (cfg *apiConfig) handleGetChirp(w http.ResponseWriter, r *http.Request) {
+	chirp_id_str := r.PathValue("chirpID")
+	chirp_id, err := uuid.Parse(chirp_id_str)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error parsing chirp ID", err)
+	}
+	chirp, err := cfg.db.GetChirp(r.Context(), chirp_id)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "chirp with given id not found", err)
+	}
+
+	respondWithJSON(w, http.StatusOK, convertChirp(chirp))
 }
