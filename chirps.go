@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -79,10 +80,28 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 }
 
 func (cfg *apiConfig) handleGetChirps(w http.ResponseWriter, r *http.Request) {
-	chirps, err := cfg.db.GetChirps(r.Context())
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "error getting chirps", err)
-		return
+	author_id_str := r.URL.Query().Get("author_id")
+
+	chirps := make([]database.Chirp, 0)
+
+	if author_id_str != "" {
+		author_id, err := uuid.Parse(author_id_str)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "couldn't parse uuid", err)
+		}
+		chirps, err = cfg.db.GetChirpsForUser(r.Context(), author_id)
+		if err != nil {
+			respondWithError(w, http.StatusNotFound, "couldn't find chirps for that user", err)
+		}
+	} else {
+		chirps, _ = cfg.db.GetChirps(r.Context())
+	}
+
+	sort_str := r.URL.Query().Get("sort")
+	if sort_str == "desc" {
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
+		})
 	}
 
 	returnChips := make([]returnVals, 0)
